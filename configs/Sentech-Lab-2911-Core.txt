@@ -1,0 +1,92 @@
+! ####################################################################
+! LAB TOPOLOGY: ENTERPRISE CORE ROUTER CONFIGURATION
+! HARDWARE: Cisco 2911 Integrated Services Router (ISR)
+! ARCHITECTURE: Router-on-a-Stick (Inter-VLAN Routing)
+! STANDARDS ENFORCED: Min 2 PCs per segment to validate broadcast domains
+! ####################################################################
+
+version 15.1
+hostname Sentech-Core-R1
+
+! --------------------------------------------------------------------
+! SECURITY MANAGEMENT & DEVICE HARDENING
+! --------------------------------------------------------------------
+no ip domain-lookup
+ip domain-name sentech.lab
+crypto key generate rsa general-keys modulus 1024
+
+enable secret SentechSecPass123!
+
+username admin privilege 15 secret SentechAdminPass!
+
+! --------------------------------------------------------------------
+! IP MANAGEMENT (DHCP SERVICES)
+! --------------------------------------------------------------------
+! Exclude gateway and infrastructure IP ranges from allocation
+ip dhcp excluded-address 192.168.10.1 192.168.10.10
+ip dhcp excluded-address 192.168.20.1 192.168.20.10
+
+! VLAN 10 (HR Department) DHCP Pool
+ip dhcp pool VLAN10_HR
+ network 192.168.10.0 255.255.255.0
+ default-router 192.168.10.1
+ dns-server 8.8.8.8
+
+! VLAN 20 (Finance Department) DHCP Pool
+ip dhcp pool VLAN20_FINANCE
+ network 192.168.20.0 255.255.255.0
+ default-router 192.168.20.1
+ dns-server 8.8.8.8
+
+! --------------------------------------------------------------------
+! INTER-VLAN ROUTING INTERFACES (GigabitEthernet0/0 Sub-interfaces)
+! --------------------------------------------------------------------
+interface GigabitEthernet0/0
+ description Trunk Link to Core-Switch-1
+ no ip address
+ no shutdown
+
+interface GigabitEthernet0/0.10
+ description Gateway for HR (Min 2 Hosts Enforced)
+ encapsulation dot1Q 10
+ ip address 192.168.10.1 255.255.255.0
+
+interface GigabitEthernet0/0.20
+ description Gateway for Finance (Min 2 Hosts Enforced)
+ encapsulation dot1Q 20
+ ip address 192.168.20.1 255.255.255.0
+
+! --------------------------------------------------------------------
+! SECURITY ACCESS CONTROL MATRICES (ACLs)
+! --------------------------------------------------------------------
+! Restrict Finance Segment from unauthorized traversal into HR network
+ip access-list extended BLOCK_FIN_TO_HR
+ deny ip 192.168.20.0 0.0.0.255 192.168.10.0 0.0.0.255
+ permit ip any any
+
+interface GigabitEthernet0/0.20
+ ip access-group BLOCK_FIN_TO_HR in
+
+! --------------------------------------------------------------------
+! ACCESS LINE SECURE PROTOCOLS
+! --------------------------------------------------------------------
+banner motd ^C
+========================================================================
+UNAUTHORIZED ACCESS TO SENTECH CORE LAB INFRASTRUCTURE IS STRICTLY PROHIBITED.
+All activities are logged and actively monitored.
+========================================================================
+^C
+
+line console 0
+ password SentechConsolePass!
+ login
+ logging synchronous
+ history size 15
+
+line vty 0 4
+ login local
+ transport input ssh
+ exec-timeout 5 0
+
+end
+write memory
