@@ -1,0 +1,115 @@
+! ####################################################################
+! LAB TOPOLOGY: ENTERPRISE EDGE SWITCH CONFIGURATION
+! HARDWARE: Cisco Catalyst 2960 Series Switch
+! ARCHITECTURE: Layer 2 Segmentation & Edge Hardening
+! STANDARDS ENFORCED: Min 2 PCs per segment to validate broadcast boundaries
+! ####################################################################
+
+version 15.0
+hostname Sentech-Edge-SW1
+
+! --------------------------------------------------------------------
+! SECURITY MANAGEMENT & DEVICE HARDENING
+! --------------------------------------------------------------------
+no ip domain-lookup
+ip domain-name sentech.lab
+
+enable secret SentechSecPass123!
+
+username admin privilege 15 secret SentechAdminPass!
+
+! --------------------------------------------------------------------
+! VLAN LOGICAL DATABASE DEPLOYMENT
+! --------------------------------------------------------------------
+vlan 10
+ name HR_Department
+!
+vlan 20
+ name Finance_Department
+!
+vlan 99
+ name Management_Native
+!
+
+! --------------------------------------------------------------------
+! INTRALINK INTERFACES & INFRASTRUCTURE TRUNKING
+! --------------------------------------------------------------------
+! FastEthernet0/24 - High-Capacity Uplink Trunk to Cisco 2911 Core Router
+interface FastEthernet0/24
+ description Uplink Trunk to Sentech-Core-R1
+ switchport trunk allowed vlan 10,20,99
+ switchport trunk native vlan 99
+ switchport mode trunk
+ no shutdown
+
+! --------------------------------------------------------------------
+! EDGE PORT ASSIGNMENTS & SWITCHPORT SECURITY
+! --------------------------------------------------------------------
+! Ports Fa0/1 - Fa0/5: HR Network Access Block (Minimum 2 PCs Enforced)
+interface range FastEthernet0/1 - 5
+ description Access Ports for HR Hosts
+ switchport access vlan 10
+ switchport mode access
+ ! -- Layer 2 Port Security Infrastructure --
+ switchport port-security
+ switchport port-security maximum 2
+ switchport port-security violation shutdown
+ switchport port-security mac-address sticky
+ spanning-tree portfast
+ no shutdown
+
+! Ports Fa0/6 - Fa0/10: Finance Network Access Block (Minimum 2 PCs Enforced)
+interface range FastEthernet0/6 - 10
+ description Access Ports for Finance Hosts
+ switchport access vlan 20
+ switchport mode access
+ ! -- Layer 2 Port Security Infrastructure --
+ switchport port-security
+ switchport port-security maximum 2
+ switchport port-security violation shutdown
+ switchport port-security mac-address sticky
+ spanning-tree portfast
+ no shutdown
+
+! --------------------------------------------------------------------
+! UNUSED PORT HARDENING (Mitigate Unauthorized Physical Access)
+! --------------------------------------------------------------------
+interface range FastEthernet0/11 - 23, GigabitEthernet0/1 - 2
+ description Unused Access Interfaces
+ switchport mode access
+ shutdown
+
+! --------------------------------------------------------------------
+! REMOTE MANAGEMENT INTERFACE (Switch Virtual Interface - SVI)
+! --------------------------------------------------------------------
+interface Vlan99
+ description Out-of-Band Switch Remote Management
+ ip address 192.168.99.10 255.255.255.0
+ no shutdown
+
+! Gateway redirection to reach the 2911 core infrastructure layer
+ip default-gateway 192.168.99.1
+
+! --------------------------------------------------------------------
+! LINE ACCESS CONTROL MATRICES
+! --------------------------------------------------------------------
+banner motd ^C
+========================================================================
+UNAUTHORIZED ACCESS TO SENTECH EDGE LAB INFRASTRUCTURE IS STRICTLY PROHIBITED.
+All activities are logged and actively monitored.
+========================================================================
+^C
+
+line console 0
+ password SentechConsolePass!
+ login
+ logging synchronous
+ history size 15
+
+line vty 0 15
+ login local
+ transport input ssh
+ exec-timeout 5 0
+
+end
+write memory
